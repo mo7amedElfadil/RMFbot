@@ -1,0 +1,6 @@
+*
+!/*.py
+!/.gitignore
+!/README.md
+!/LICENSE
+*main.py
