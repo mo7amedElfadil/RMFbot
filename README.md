@@ -20,16 +20,10 @@ This bot listens to messages in specific channels and forwards them to other
 channels based on role mentions. It also supports scheduling message
 forwarding at specified times.
 
-Commands:
-
-    - !set_channels: Set the channels to listen to and the role mappings
-    for forwarding messages.
-    - !help: Display the help message.
-
 
 **The current features are:**
 
-1. `Message forwarding` to mapped channels. It is currently mapped by default to:
+1. `Message forwarding` to mapped channels. Example of mapping:
 Channels to listen to:
 - :loudspeaker:︱announcement
 - :dart:︱challenges-tasks
@@ -59,6 +53,7 @@ Forwarded message
         At: 09-03-2024 15:17 (GMT)
         Set to arrive at: 15:18:00 (GMT)
 ```
+
 
 ## Installing
 
@@ -110,6 +105,10 @@ Once the bot script is running either remotely or locally, check your discord se
 	2. List the channel name and the role it will be mapped to
 	   The format is channel_name:role_name, separated by commas.
 - `!help`: Display the help message.
+- `!bot_help`: Display the bot help message.
+- `!set_log_channel`: set the log channel for the server.
+- `!get_log_channel`: get the log channel for the server.
+- `!get_channels`: get the channels and role mappings for the server.
 
 
 ## Contributing

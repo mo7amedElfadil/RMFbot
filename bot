@@ -10,6 +10,8 @@ Commands:
     - !set_channels: Set the channels to listen to and the role mappings
     for forwarding messages.
     - !help: Display the help message.
+    - !bot_help: Display the help message
+    - !set_log_channel: Set the log channel for the server.
     - !set_log_channel: Set the log channel for the server.
     - !get_log_channel: Get the log channel for the server.
     - !get_channels: Get the channels and role mappings for the server.
@@ -128,9 +130,10 @@ async def custom_help(ctx):
         2. List the channel name and the role it will be mapped to
            The format is channel_name:role_name, separated by commas.
     - `!help`: Display the help message.
-    - `!set_log_channel`: Set the log channel for the server.
-    - `!get_log_channel`: Get the log channel for the server.
-    - `!get_channels`: Get the channels and role mappings for the server.
+    - `!bot_help`: display the help message
+    - `!set_log_channel`: set the log channel for the server.
+    - `!get_log_channel`: get the log channel for the server.
+    - `!get_channels`: get the channels and role mappings for the server.
     """
     await ctx.send(help_message)
 
