@@ -63,7 +63,7 @@ Forwarded message
 ## Installing
 
 [Invite Link](https://discord.com/oauth2/authorize?client_id=1215734062799650927&permissions=2183991393344&scope=bot) 
-to add the bot to your server.
+to add the bot to your server. For full functionality its best to give it administrator role.
 
 Clone the repository
 ```

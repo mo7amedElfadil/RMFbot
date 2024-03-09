@@ -10,6 +10,9 @@ Commands:
     - !set_channels: Set the channels to listen to and the role mappings
     for forwarding messages.
     - !help: Display the help message.
+    - !set_log_channel: Set the log channel for the server.
+    - !get_log_channel: Get the log channel for the server.
+    - !get_channels: Get the channels and role mappings for the server.
 
 Author: Mohamed Elfadil
 """
@@ -70,7 +73,7 @@ channel_name_to_role_map = {
 }
 log_channel_name = '🗃︱log-scheduling'
 
-server_mappings = {'1213387789484429322': {
+server_mappings = {1213387789484429322: {
                 'channels': channel_to_listen,
                 'role_mappings': channel_name_to_role_map,
                 'log_channel': log_channel_name,
@@ -81,15 +84,21 @@ def log_and_print(message):
     print(message)
     logging.info(message)
 
-def load_json():
+def load_json(server_mappings=None):
     """
     Load the server mappings from the JSON file.
     """
+    if server_mappings is None:
+        server_mappings = {}  # Set a default value if not provided
     try:
         with open(json_file, 'r') as file:
-            server_mappings.update(load(file))
+            server_mappings = {int(key): value for key, value in load(file).items()}
+            log_and_print('Server mappings loaded successfully.\n'
+                    + f' Current mappings: {server_mappings}')
     except FileNotFoundError:
         log_and_print('No server mappings found. Using default mappings.')
+    return server_mappings
+
 
 def save_json():
     """
@@ -102,7 +111,7 @@ def save_json():
 if not exists(json_file):
     save_json()
 else:
-    load_json()
+    server_mappings = load_json(server_mappings)
 
 @bot.command(name='bot_help', help='Display the help message')
 async def custom_help(ctx):
@@ -119,6 +128,9 @@ async def custom_help(ctx):
         2. List the channel name and the role it will be mapped to
            The format is channel_name:role_name, separated by commas.
     - `!help`: Display the help message.
+    - `!set_log_channel`: Set the log channel for the server.
+    - `!get_log_channel`: Get the log channel for the server.
+    - `!get_channels`: Get the channels and role mappings for the server.
     """
     await ctx.send(help_message)
 
@@ -182,7 +194,7 @@ async def set_log_channel(ctx):
                                                   m.channel == ctx.channel)
             log_channel_name = log_channel_input.content.strip()
             # Store the log channel for the server
-            server_id = str(ctx.guild.id)
+            server_id = ctx.guild.id
             server_mappings.setdefault(server_id, {})['log_channel'] = log_channel_name
             await ctx.send("Log channel updated successfully.")
             save_json()
@@ -191,6 +203,36 @@ async def set_log_channel(ctx):
     else:
         await ctx.send("You do not have the necessary permissions"
                        + " to run this command.")
+
+@bot.command(name='get_log_channel', help='Get the log channel for the server')
+async def get_log_channel(ctx):
+    """
+    Get the log channel for the server.
+    """
+    server_id = ctx.guild.id
+    log_channel = server_mappings.get(server_id, {}).get('log_channel')
+    if log_channel:
+        await ctx.send(f"The log channel for this server is {log_channel}.")
+    else:
+        await ctx.send("No log channel has been set for this server.")
+
+
+@bot.command(name='get_channels', help='Get the channels and role mappings for the server')
+async def get_channels(ctx):
+    """
+    Get the channels and role mappings for the server.
+    """
+    server_id = ctx.guild.id
+    log_and_print(f'Getting channels for server {ctx.guild.id}')
+    server_config = server_mappings.get(server_id)
+    if server_config:
+        channels = ', '.join(server_config.get('channels', []))
+        role_mappings = ', '.join([f'{channel}:{role}' for channel, role in
+                                   server_config.get('role_mappings', {}).items()])
+        await ctx.send(f"Channels to listen to: {channels}\n"
+                       + f"Channel to role mappings: {role_mappings}")
+    else:
+        await ctx.send("No channels and role mappings have been set for this server.")
 
 
 @bot.event
@@ -290,6 +332,8 @@ async def on_ready():
     Print the bot's name when it is ready.
     """
     log_and_print(f'Logged in as {bot.user.name}')
+    global server_mappings
+    server_mappings = load_json(server_mappings)
 
 
 
