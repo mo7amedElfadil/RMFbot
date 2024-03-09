@@ -21,6 +21,7 @@ from discord.ext import commands
 import datetime
 import asyncio
 import pytz
+from json import load, dump
 
 # get username
 user = getenv('USER') or getenv('LOGNAME')
@@ -30,6 +31,9 @@ log_file_name = 'bot_log.txt'
 if not exists(log_directory):
     makedirs(log_directory)
 log_file_path = join(log_directory, log_file_name)
+# json file
+json_file = f'/home/{user}/RMFBot/server_mappings.json'
+
 # intents
 intents = discord.Intents.default()
 intents.typing = True
@@ -39,6 +43,8 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 logging.basicConfig(filename=log_file_path, level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
+# Dictionary to store server-specific mappings
+
 """
 Channels to listen to:
 - 📢︱announcement
@@ -64,11 +70,39 @@ channel_name_to_role_map = {
 }
 log_channel_name = '🗃︱log-scheduling'
 
+server_mappings = {'1213387789484429322': {
+                'channels': channel_to_listen,
+                'role_mappings': channel_name_to_role_map,
+                'log_channel': log_channel_name,
+            }}
+
 
 def log_and_print(message):
     print(message)
     logging.info(message)
 
+def load_json():
+    """
+    Load the server mappings from the JSON file.
+    """
+    try:
+        with open(json_file, 'r') as file:
+            server_mappings.update(load(file))
+    except FileNotFoundError:
+        log_and_print('No server mappings found. Using default mappings.')
+
+def save_json():
+    """
+    Save the server mappings to the JSON file.
+    """
+    with open(json_file, 'w') as file:
+        dump(server_mappings, file)
+
+
+if not exists(json_file):
+    save_json()
+else:
+    load_json()
 
 @bot.command(name='bot_help', help='Display the help message')
 async def custom_help(ctx):
@@ -89,11 +123,11 @@ async def custom_help(ctx):
     await ctx.send(help_message)
 
 
-@bot.command(name='set_channels', help='Set channels and role mappings')
+@bot.command(name='set_channels', help='Set channels and role mappings for the server')
 async def set_channels(ctx):
     """
     Set the channels to listen to and the role mappings
-    for forwarding messages.
+    for forwarding messages for the server.
     """
     if ctx.author.guild_permissions.administrator:
         await ctx.send("Please provide the channels to listen"
@@ -103,9 +137,8 @@ async def set_channels(ctx):
                                                 check=lambda m: m.author ==
                                                 ctx.author and
                                                 m.channel == ctx.channel)
-            channel_to_listen.clear()
-            channel_to_listen.extend([channel.strip() for channel in
-                                      channels_input.content.split(',')])
+            channel_to_listen = [channel.strip() for channel in
+                                 channels_input.content.split(',')]
 
             await ctx.send("Please provide the channel name to role mappings"
                            + " (in the format channel_name:role_name,"
@@ -114,12 +147,45 @@ async def set_channels(ctx):
                                                 check=lambda m: m.author ==
                                                 ctx.author and
                                                 m.channel == ctx.channel)
-            channel_name_to_role_map.clear()
+            channel_name_to_role_map = {}
             for mapping in mappings_input.content.split(','):
                 channel_name, role_name = map(str.strip, mapping.split(':'))
                 channel_name_to_role_map[channel_name] = role_name
 
+            # Store the channels and mappings for the server
+            server_id = ctx.guild.id
+            server_mappings[server_id] = {
+                'channels': channel_to_listen,
+                'role_mappings': channel_name_to_role_map
+            }
+
             await ctx.send("Channels and role mappings updated successfully.")
+            save_json()
+        except asyncio.TimeoutError:
+            await ctx.send("Timeout. Please run the command again.")
+    else:
+        await ctx.send("You do not have the necessary permissions"
+                       + " to run this command.")
+
+
+@bot.command(name='set_log_channel', help='Set the log channel for the server')
+async def set_log_channel(ctx):
+    """
+    Set the log channel for the server.
+    """
+    if ctx.author.guild_permissions.administrator:
+        await ctx.send("Please provide the log channel name:")
+        try:
+            log_channel_input = await bot.wait_for('message', timeout=60.0,
+                                                  check=lambda m: m.author ==
+                                                  ctx.author and
+                                                  m.channel == ctx.channel)
+            log_channel_name = log_channel_input.content.strip()
+            # Store the log channel for the server
+            server_id = str(ctx.guild.id)
+            server_mappings.setdefault(server_id, {})['log_channel'] = log_channel_name
+            await ctx.send("Log channel updated successfully.")
+            save_json()
         except asyncio.TimeoutError:
             await ctx.send("Timeout. Please run the command again.")
     else:
@@ -133,60 +199,66 @@ async def on_message(message):
     Listen to messages in the channels to listen to and
     forward them to the respective channels based on the role mentions.
     """
-    if ((message.channel.name in channel_to_listen)
-            and (message.author != bot.user)
-            and (message.content != '')):
-        mentioned_roles = [role.name for role in message.role_mentions]
-        forwarding_tasks = []
+    server_id = message.guild.id
+    if server_id in server_mappings:
+        server_config = server_mappings[server_id]
+        channel_to_listen = server_config['channels']
+        channel_name_to_role_map = server_config['role_mappings']
+        if ((message.channel.name in channel_to_listen)
+                and (message.author != bot.user)
+                and (message.content != '')):
 
-        for channel_name, role in channel_name_to_role_map.items():
-            log_and_print(f'Checking for role {role} in mentioned roles')
-            if role in mentioned_roles:
-                destination_channel = discord.utils.get(message.guild.channels,
-                                                        name=channel_name)
-                log_channel = discord.utils.get(message.guild.channels,
-                                                name=log_channel_name)
-                time_line = next((line.strip() for line in
-                                  message.content.split('\n')
-                                  if line.strip().startswith("TIME:")), None)
+            mentioned_roles = [role.name for role in message.role_mentions]
+            forwarding_tasks = []
 
-                if time_line:
-                    time_str = time_line.strip().split("TIME:",
-                                                       1)[1].split()[0].strip()
-                    try:
-                        scheduled_time_gmt = datetime.datetime.strptime(
+            for channel_name, role in channel_name_to_role_map.items():
+                log_and_print(f'Checking for role {role} in mentioned roles')
+                if role in mentioned_roles:
+                    destination_channel = discord.utils.get(message.guild.channels,
+                                                            name=channel_name)
+                    log_channel = discord.utils.get(message.guild.channels,
+                                                    name=log_channel_name)
+                    time_line = next((line.strip() for line in
+                                      message.content.split('\n')
+                                      if line.strip().startswith("TIME:")), None)
+
+                    if time_line:
+                        time_str = time_line.strip().split("TIME:",
+                                                           1)[1].split()[0].strip()
+                        try:
+                            scheduled_time_gmt = datetime.datetime.strptime(
                                                 time_str, "%H:%M").time()
-                        current_time_gmt = datetime.datetime.utcnow().time()
-                        time_difference = datetime.datetime.combine(
-                            datetime.date.today(),
-                            scheduled_time_gmt) - datetime.datetime.combine(
+                            current_time_gmt = datetime.datetime.utcnow().time()
+                            time_difference = datetime.datetime.combine(
                                 datetime.date.today(),
-                                current_time_gmt)
-                        message_content_copy = message.content.replace(
-                                                time_line, '')
-                        # Schedule the forwarding task
-                        log_and_print(f'Scheduling forwarding to ' +
-                                      f'{destination_channel.name} ' +
-                                      f'at {scheduled_time_gmt}')
+                                scheduled_time_gmt) - datetime.datetime.combine(
+                                    datetime.date.today(),
+                                    current_time_gmt)
+                            message_content_copy = message.content.replace(
+                                                    time_line, '')
+                            # Schedule the forwarding task
+                            log_and_print(f'Scheduling forwarding to ' +
+                                          f'{destination_channel.name} ' +
+                                          f'at {scheduled_time_gmt}')
 
-                        forwarding_tasks.append(
-                                    schedule_forwarding(
-                                        destination_channel, log_channel,
-                                        scheduled_time_gmt, message,
-                                        message_content_copy,
-                                        time_difference.seconds))
-                    except ValueError:
-                        m = f"Invalid time format in the TIME line: {time_str}"
-                        print(m)
-                        logging.exception(m)
-                else:
-                    # If time_line is not found, forward immediately
-                    m = "TIME line not found. Forwarding immediately."
-                    log_and_print(m)
-                    await destination_channel.send(message.content)
+                            forwarding_tasks.append(
+                                        schedule_forwarding(
+                                            destination_channel, log_channel,
+                                            scheduled_time_gmt, message,
+                                            message_content_copy,
+                                            time_difference.seconds))
+                        except ValueError:
+                            m = f"Invalid time format in the TIME line: {time_str}"
+                            print(m)
+                            logging.exception(m)
+                    else:
+                        # If time_line is not found, forward immediately
+                        m = "TIME line not found. Forwarding immediately."
+                        log_and_print(m)
+                        await destination_channel.send(message.content)
 
-        # Wait for all forwarding tasks to complete
-        await asyncio.gather(*forwarding_tasks)
+            # Wait for all forwarding tasks to complete
+            await asyncio.gather(*forwarding_tasks)
 
     await bot.process_commands(message)
 
@@ -218,6 +290,7 @@ async def on_ready():
     Print the bot's name when it is ready.
     """
     log_and_print(f'Logged in as {bot.user.name}')
+
 
 
 def run_bot(token):
