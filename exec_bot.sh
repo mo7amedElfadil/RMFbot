@@ -1,22 +1,35 @@
 #!/usr/bin/env bash
-if [ -z "$1" ]; then
-  echo "No argument supplied"
-  exit 1
-fi
-if [ "$1" = "r" ]; then
-	echo "starting bot"
-	ssh -i "$path_to_ssh_key" "$USER@$IP" "pkill bot"
-	COMMAND="bot $discordTOKEN"
-elif [ "$1" = "k" ]; then
-	echo "killing bot"
-	COMMAND="pkill bot"
-else
-	echo "Invalid argument"
-	exit 1
-fi
-IP=$SERVER3LB
-USER=ubuntu
-path_to_ssh_key=~/.ssh/id_rsa
+function bot()
+{
+	if [ -z "$1" ]; then
+		echo "Usage: ./exec_bot.sh [r/run/k/kill/t/tail/l/log]"
+		exit 1
+	fi
+	IP=$SERVER3LB
+	USER=ubuntu
+	# r or run
+	# k or kill
+	if [ "$1" = "r" ] || [ "$1" = "run" ]; then
+		echo "starting bot"
+		ssh -i "$sshKEY" "$USER@$IP" "pkill bot"
+		COMMAND="bot $discordTOKEN"
+	elif [ "$1" = "k" ] || [ "$1" = "kill" ]; then
+		echo "killing bot"
+		COMMAND="pkill bot"
+	elif [ "$1" = 't' ] || [ "$1" = 'tail' ]; then
+		echo "reading tail of bot log"
+		COMMAND="tail -f /home/$USER/RMFBot/bot_log/bot_log.txt"
+	elif [ "$1" = 'l' ] || [ "$1" = 'log' ]; then
+		echo "reading bot log file"
+		COMMAND="less /home/$USER/RMFBot/bot_log/bot_log.txt"
+	else
+		echo "Invalid argument"
+		exit 1
+	fi
 
-ssh -i "$path_to_ssh_key" "$USER@$IP" "$COMMAND"
+
+	ssh -i "$sshKEY" "$USER@$IP" "$COMMAND"
+}
+
+bot "$1"
 
